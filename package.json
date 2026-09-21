@@ -1,0 +1,25 @@
+{
+  "name": "proscenium",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "setup": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts && .venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
+  },
+  "dependencies": {
+    "next": "^15.5.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  }
+}
