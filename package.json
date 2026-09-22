@@ -8,7 +8,7 @@
     "start": "next start",
     "setup": "python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts && .venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
+    "test": "tsx --test --experimental-test-isolation=process tests/*.test.ts && .venv/bin/python -m unittest discover -s tests -p 'test_*.py'"
   },
   "dependencies": {
     "next": "^15.5.3",

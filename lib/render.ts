@@ -10,6 +10,9 @@ import {
   projectLogline,
 } from "./actions";
 import { StudioError } from "./errors";
+import { isGenerated } from "./faces";
+import { falConfigured } from "./models/settings";
+import { renderMotionReel } from "./models/motion";
 import { projectDir, pythonExecutable, rendererScript, resolveInside } from "./paths";
 import { saveProject } from "./store";
 import { sceneShots, type Shot } from "./shots";
@@ -35,15 +38,19 @@ export async function renderReel(project: Project, partId: string): Promise<Proj
   fs.mkdirSync(path.dirname(output), { recursive: true });
 
   let current = saveProject(markReelRendering(project, partId));
-  const shots = shotsForReel(current, part, scenes);
-  const work = path.join(projectDir(project.id), "work", part.id);
-  fs.rmSync(work, { recursive: true, force: true });
-  fs.mkdirSync(work, { recursive: true });
-  const specPath = path.join(work, "reel.json");
-  fs.writeFileSync(specPath, JSON.stringify({ title: project.title, out: output, shots }, null, 2));
 
   try {
-    await runPython(rendererScript("render_part.py"), specPath);
+    if (falConfigured()) {
+      await renderMotionReel(current, scenes, output);
+    } else {
+      const shots = shotsForReel(current, part, scenes);
+      const work = path.join(projectDir(project.id), "work", part.id);
+      fs.rmSync(work, { recursive: true, force: true });
+      fs.mkdirSync(work, { recursive: true });
+      const specPath = path.join(work, "reel.json");
+      fs.writeFileSync(specPath, JSON.stringify({ title: project.title, out: output, shots }, null, 2));
+      await runPython(rendererScript("render_part.py"), specPath);
+    }
     const duration = await probeDuration(output);
     current = saveProject(markReelReady(readFresh(current), partId, relative, duration));
     return current;
@@ -56,7 +63,7 @@ export async function renderReel(project: Project, partId: string): Promise<Proj
 
 export async function assemblePicture(project: Project): Promise<Project> {
   if (!assembleReady(project)) {
-    throw new StudioError("Every reel has to be approved, with signed consent on file, before the picture can be merged.");
+    throw new StudioError("Every reel has to be approved, with the cast on file, before the picture can be merged.");
   }
   if (!project.script) throw new StudioError("The script is missing.");
   const files = project.parts.map((part) => {
@@ -70,11 +77,13 @@ export async function assemblePicture(project: Project): Promise<Project> {
     .filter((name, index, all) => all.indexOf(name) === index)
     .map((name) => {
       const member = project.cast.find((item) => item.characterName === name);
-      if (!member) throw new StudioError(`Missing consent for ${name}.`);
+      if (!member) throw new StudioError(`Missing cast for ${name}.`);
+      const generated = isGenerated(member);
       return {
         character: name,
-        actor: member.actorLegalName,
-        consent: member.consentSha256,
+        actor: generated ? "Generated character" : member.actorLegalName,
+        consent: generated ? "" : member.consentSha256,
+        generated,
       };
     });
 
@@ -160,6 +169,7 @@ function shotsForReel(project: Project, part: VideoPart, scenes: Scene[]): Shot[
 
 function memberFor(project: Project, character: string): CastMember {
   const member = project.cast.find((item) => item.characterName === character);
+  if (member && isGenerated(member) && member.photoFile) return member;
   if (!member?.photoFile || !member.attested || !member.consentFile) {
     throw new StudioError(`Refusing to photograph ${character} without a consented portrait.`);
   }

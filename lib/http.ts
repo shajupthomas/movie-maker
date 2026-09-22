@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { StudioError } from "./errors";
 import type { StudioPayload } from "./types";
 
-export function json(payload: StudioPayload | Record<string, unknown>, status = 200): NextResponse {
+export function json(payload: StudioPayload | object, status = 200): NextResponse {
   return NextResponse.json(payload, {
     status,
     headers: { "Cache-Control": "no-store" },

@@ -106,15 +106,16 @@ def credit_cards(spec: dict, work: Path) -> list[Path]:
             character = pretty(entry.get("character") or "")
             actor = entry.get("actor") or ""
             center_text(draw, character, y, font(SERIF_BOLD, 32), CREAM)
-            center_text(draw, f"played by  {actor}", y + 40, font(SERIF_ITALIC, 22), MUTED)
+            credit = "generated fictional character" if entry.get("generated") else f"played by  {actor}"
+            center_text(draw, credit, y + 40, font(SERIF_ITALIC, 22), MUTED)
             y += 88
-        center_text(
-            draw,
-            "Likeness used under a signed consent letter on file.",
-            620,
-            font(SANS, 16),
-            COPPER,
-        )
+        notes = []
+        if any(item.get("generated") for item in page):
+            notes.append("Generated faces are fictional adults, not a real person.")
+        if any(not item.get("generated") for item in page) or not page:
+            notes.append("Likeness used under a signed consent letter on file.")
+        for offset, note in enumerate(notes):
+            center_text(draw, note, 600 + offset * 28, font(SANS, 16), COPPER)
         path = work / f"credits-{index}.png"
         img.save(path)
         paths.append(path)

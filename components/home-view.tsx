@@ -63,14 +63,17 @@ export default function HomeView() {
     <>
       <header className="topbar">
         <a className="brand" href="/">Proscenium</a>
-        <span className="meta">Human gate at every cut</span>
+        <span className="top-links">
+          <a href="/models">Models</a>
+          <span className="meta">Human gate at every cut</span>
+        </span>
       </header>
       <main id="main" className="hero">
         <p className="eyebrow">Picture studio</p>
         <h1>A brief does not become a movie until you pass it through.</h1>
         <p className="lede">
           The agent writes the full story, then the screenplay. You approve or correct both.
-          Real actors come in only with face photographs and signed consent letters.
+          Cast a family member with a face photograph and a signed consent letter, or ask for a fictional adult face that holds from every angle.
           The picture is cut into the longest reels the scenes will bear, and nothing is merged until you have approved every one.
         </p>
         <form className="panel" onSubmit={onSubmit}>

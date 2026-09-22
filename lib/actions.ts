@@ -1,4 +1,5 @@
 import { StudioError } from "./errors";
+import { FACE_VIEWS, VIEW_LABEL, isGenerated } from "./faces";
 import { parseScreenplay } from "./screenplay";
 import { planParts, speakingCharacters, totalDuration } from "./shots";
 import { extractLogline, writeScript, writeStory } from "./story";
@@ -276,14 +277,28 @@ export function markReelFailed(project: Project, partId: string, error: string):
 export function listBlockers(project: Project): string[] {
   const reasons: string[] = [];
   if (!project.script?.approved) return ["Approve the script before casting."];
-  if (!project.adultCastAttested) {
+  const speakers = speakingCharacters(project.script.scenes);
+  const needsAdult = speakers.some((name) => {
+    const member = project.cast.find((item) => item.characterName === name);
+    return !member || !isGenerated(member);
+  });
+  if (needsAdult && !project.adultCastAttested) {
     reasons.push("Confirm that every photographed actor is 18 or older.");
   }
-  for (const name of speakingCharacters(project.script.scenes)) {
+  for (const name of speakers) {
     const member = project.cast.find((item) => item.characterName === name);
     const label = name;
     if (!member) {
-      reasons.push(`${label} needs an actor, a face photo, and a signed consent letter.`);
+      reasons.push(`${label} needs a family member with a signed consent letter, or a generated fictional face.`);
+      continue;
+    }
+    if (isGenerated(member)) {
+      if (!member.identity?.trim()) reasons.push(`${label} needs a fictional identity.`);
+      if (!member.photoFile) reasons.push(`${label} needs a generated front portrait.`);
+      for (const view of FACE_VIEWS) {
+        if (view === "front") continue;
+        if (!member.views?.[view]) reasons.push(`${label} is missing the ${VIEW_LABEL[view].toLowerCase()} view of the same face.`);
+      }
       continue;
     }
     if (!member.actorLegalName.trim()) reasons.push(`${label} needs the actor's legal name.`);
@@ -354,7 +369,7 @@ function stepStates(project: Project): StepState[] {
       id: "cast",
       label: "Cast & consent",
       phase: phase("cast", scriptApproved, castReady),
-      hint: scriptApproved ? (castReady ? "Consent on file" : "Photos and signed letters") : "Opens after the script is approved",
+      hint: scriptApproved ? (castReady ? "Cast on file" : "Family consent or a generated face") : "Opens after the script is approved",
     },
     {
       id: "reels",

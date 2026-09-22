@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { StudioError } from "./errors";
 import { projectDir, projectFile, projectsRoot } from "./paths";
-import type { Project } from "./types";
+import type { CastMember, Project } from "./types";
 
 export function listProjects(): Project[] {
   const root = projectsRoot();
@@ -27,7 +27,7 @@ export function readProject(id: string): Project {
   return {
     ...raw,
     adultCastAttested: Boolean(raw.adultCastAttested),
-    cast: raw.cast ?? [],
+    cast: (raw.cast ?? []).map(normalizeMember),
     parts: raw.parts ?? [],
     finalMovie: raw.finalMovie ?? null,
   };
@@ -46,6 +46,14 @@ export function deleteProject(id: string): void {
   const dir = projectDir(id);
   if (!fs.existsSync(dir)) throw new StudioError("That production does not exist.", 404);
   fs.rmSync(dir, { recursive: true, force: true });
+}
+
+function normalizeMember(member: CastMember): CastMember {
+  return {
+    ...member,
+    source: member.source === "generated" ? "generated" : "person",
+    views: member.views ?? {},
+  };
 }
 
 export function clearRenderedMedia(id: string): void {
