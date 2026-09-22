@@ -60,9 +60,19 @@ export interface ScriptDraft {
   updatedAt: string;
 }
 
+export type CastSource = "person" | "generated";
+
+export type FaceView =
+  | "front"
+  | "threeQuarterLeft"
+  | "threeQuarterRight"
+  | "profileLeft"
+  | "profileRight";
+
 export interface CastMember {
   id: string;
   characterName: string;
+  source?: CastSource;
   actorLegalName: string;
   photoFile: string;
   consentFile: string;
@@ -71,6 +81,8 @@ export interface CastMember {
   attested: boolean;
   consentDate: string;
   uploadedAt: string;
+  identity?: string;
+  views?: Partial<Record<FaceView, string>>;
 }
 
 export type ReelStatus =

@@ -1,6 +1,7 @@
 import { approveScript, present, reopenScript, reviseScript, saveScript } from "@/lib/actions";
 import { StudioError } from "@/lib/errors";
 import { fail, json } from "@/lib/http";
+import { polishScript } from "@/lib/models/writer";
 import { clearRenderedMedia, readProject, saveProject } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -16,7 +17,7 @@ export async function POST(request: Request, context: Context) {
     const action = String(body.action || "");
     let next = project;
     if (action === "save") next = saveScript(project, String(body.text || ""));
-    else if (action === "revise") next = reviseScript(project, String(body.notes || ""));
+    else if (action === "revise") next = await polishScript(reviseScript(project, String(body.notes || "")));
     else if (action === "approve") next = approveScript(project, String(body.text || ""));
     else if (action === "reopen") next = reopenScript(project);
     else throw new StudioError("Unknown script action.");

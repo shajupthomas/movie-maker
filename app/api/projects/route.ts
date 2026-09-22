@@ -1,5 +1,6 @@
 import { createProduction, present } from "@/lib/actions";
 import { fail, json } from "@/lib/http";
+import { polishStory } from "@/lib/models/writer";
 import { assertBriefAllowed } from "@/lib/safety";
 import { listProjects, saveProject } from "@/lib/store";
 import type { CreateProjectInput } from "@/lib/types";
@@ -24,8 +25,8 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as CreateProjectInput;
     assertBriefAllowed(body.brief || "");
-    const project = saveProject(createProduction(body));
-    return json(present(project), 201);
+    const drafted = await polishStory(createProduction(body));
+    return json(present(saveProject(drafted)), 201);
   } catch (error) {
     return fail(error);
   }

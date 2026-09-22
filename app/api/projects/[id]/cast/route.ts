@@ -72,9 +72,11 @@ export async function POST(request: Request, context: Context) {
       throw new StudioError("Each speaking part needs both a face photo and a signed consent letter.");
     }
 
+    const photoChanged = Boolean(photo instanceof File && photo.size > 0);
     const member: CastMember = {
       id: memberId,
       characterName,
+      source: "person",
       actorLegalName,
       photoFile,
       consentFile,
@@ -83,6 +85,7 @@ export async function POST(request: Request, context: Context) {
       attested: true,
       consentDate,
       uploadedAt: nowIso(),
+      views: !photoChanged && existing?.source !== "generated" ? existing?.views : {},
     };
     const cast = existing
       ? project.cast.map((item) => item.characterName === characterName ? member : item)

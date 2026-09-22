@@ -93,6 +93,7 @@ img, video { max-width: 100%; }
   align-items: baseline;
   padding: 22px 0 8px;
 }
+.top-links { display: flex; gap: 16px; align-items: baseline; }
 .brand {
   font-family: var(--serif);
   font-size: 22px;
@@ -130,7 +131,7 @@ label span, .label {
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-input[type="text"], input[type="date"], input[type="number"], select, textarea {
+input[type="text"], input[type="date"], input[type="number"], input[type="password"], input[type="url"], select, textarea {
   width: 100%;
   background: #0e0d0b;
   border: 1px solid var(--line);
@@ -230,6 +231,13 @@ fieldset.plain { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 .scene-row strong { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--copper-2); }
 .cast-grid { display: grid; gap: 14px; }
 .cast-card { display: grid; grid-template-columns: 160px 1fr; gap: 16px; border: 1px solid var(--line); padding: 14px; background: var(--bg-2); }
+.source-toggle { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.source-toggle button[aria-pressed="true"] { border-color: var(--copper); color: var(--cream); background: #2a2118; }
+.angles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.angles figure { margin: 0; }
+.angles img { width: 100%; aspect-ratio: 4/5; object-fit: cover; background: #000; }
+.angles figcaption { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
+.models-form h2 { margin: 8px 0; }
 .portrait { width: 160px; height: 200px; object-fit: cover; background: #000; }
 .portrait.empty { display: grid; place-items: center; color: var(--muted); border: 1px dashed var(--line); }
 .check { display: flex; gap: 10px; align-items: flex-start; }
@@ -251,6 +259,7 @@ fieldset.plain { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
   .rail a[data-phase="current"] { border-bottom-color: var(--copper); }
   .manuscript { padding: 24px 18px; }
   .portrait { width: 100%; height: auto; aspect-ratio: 4/5; }
+  .angles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FACE_VIEWS, VIEW_LABEL } from "@/lib/faces";
 import { formatDuration, shortHash } from "@/lib/format";
+import type { PublicSettings } from "@/lib/models/public";
 import { parseScreenplay } from "@/lib/screenplay";
 import { titleCaseName } from "@/lib/text";
-import type { Project, StudioPayload, VideoPart } from "@/lib/types";
+import type { CastMember, FaceView, Project, StudioPayload, VideoPart } from "@/lib/types";
 
 const REEL_LABEL: Record<VideoPart["status"], string> = {
   planned: "Not rendered",
@@ -32,6 +34,7 @@ export default function StudioView({ projectId }: { projectId: string }) {
   const [adult, setAdult] = useState(false);
   const [confirmMerge, setConfirmMerge] = useState(false);
   const [reelNotes, setReelNotes] = useState<Record<string, string>>({});
+  const [models, setModels] = useState<PublicSettings | null>(null);
 
   async function load() {
     const response = await fetch(`/api/projects/${projectId}`);
@@ -54,6 +57,7 @@ export default function StudioView({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     load().catch((err) => setError(err instanceof Error ? err.message : "Could not open the production."));
+    fetch("/api/settings").then((response) => response.json()).then(setModels).catch(() => undefined);
     // The production id is the only load key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -99,7 +103,10 @@ export default function StudioView({ projectId }: { projectId: string }) {
     <>
       <header className="topbar">
         <a className="brand" href="/">Proscenium</a>
-        <span className="meta">{project.genre} · {project.tone} · aim {project.targetMinutes}:00</span>
+        <span className="top-links">
+          <a href="/models">Models</a>
+          <span className="meta">{project.genre} · {project.tone} · aim {project.targetMinutes}:00</span>
+        </span>
       </header>
       <div className="studio">
         <nav className="rail" aria-label="Production gates">
@@ -195,6 +202,7 @@ export default function StudioView({ projectId }: { projectId: string }) {
             setAdult={setAdult}
             busy={busy}
             run={run}
+            models={models}
           />
 
           <ReelsSection
@@ -204,6 +212,7 @@ export default function StudioView({ projectId }: { projectId: string }) {
             notes={reelNotes}
             setNotes={setReelNotes}
             run={run}
+            motion={Boolean(models?.falConfigured)}
           />
 
           <PictureSection
@@ -364,7 +373,7 @@ function ScriptSection({
 }
 
 function CastSection({
-  project, characters, blockers, locked, adult, setAdult, busy, run,
+  project, characters, blockers, locked, adult, setAdult, busy, run, models,
 }: {
   project: Project;
   characters: string[];
@@ -374,17 +383,18 @@ function CastSection({
   setAdult: (value: boolean) => void;
   busy: string;
   run: (label: string, path: string, init?: RequestInit) => Promise<void>;
+  models: PublicSettings | null;
 }) {
   return (
     <section className="section" id="cast">
       <div className="section-head">
         <div>
-          <p className="pill">Cast and consent</p>
-          <h2>Faces with signatures</h2>
+          <p className="pill">Cast</p>
+          <h2>Family, or a fictional face</h2>
           <p>
-            Every speaking part needs the actor’s face photograph and a consent letter that actor has signed.
-            Proscenium records the file and your attestation. It does not pretend to notarize ink.
-            Photographs of anyone under 18 are not accepted.
+            For each speaking part, file a family member’s photograph and the consent letter they signed,
+            or ask the picture model to invent a fictional adult and hold that face from every angle.
+            Photographs of anyone under 18 are not accepted. Generated faces are not real people, and a child role is not generated as a photograph.
           </p>
         </div>
         <a className="button" href={`/api/projects/${project.id}/consent-template`}>Download consent letters</a>
@@ -405,14 +415,17 @@ function CastSection({
               });
             }}
           />
-          <span>I confirm every actor who will be photographed for this production is 18 or older.</span>
+          <span>I confirm every family member who will be photographed for this production is 18 or older.</span>
         </label>
         {blockers.length ? (
           <ul>{blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>
-        ) : <p className="note">Consent is on file for every speaking part.</p>}
+        ) : <p className="note">Every speaking part has a consented family member or a generated face.</p>}
+        {!models?.falConfigured ? (
+          <p className="note">Generated faces and matched angles need the picture model. <a href="/models">Connect it</a> when you want them. Family photographs can still be filed and played as an animatic.</p>
+        ) : null}
         <div className="cast-grid">
           {characters.map((name) => (
-            <CastCard key={name} project={project} name={name} run={run} />
+            <CastCard key={name} project={project} name={name} run={run} models={models} />
           ))}
         </div>
       </fieldset>
@@ -421,43 +434,33 @@ function CastSection({
 }
 
 function CastCard({
-  project, name, run,
+  project, name, run, models,
 }: {
   project: Project;
   name: string;
   run: (label: string, path: string, init?: RequestInit) => Promise<void>;
+  models: PublicSettings | null;
 }) {
   const member = project.cast.find((item) => item.characterName === name);
-  const [actor, setActor] = useState(member?.actorLegalName ?? "");
-  const [date, setDate] = useState(member?.consentDate ?? new Date().toISOString().slice(0, 10));
-  const [attested, setAttested] = useState(member?.attested ?? false);
+  const [mode, setMode] = useState<"person" | "generated">(member?.source === "generated" ? "generated" : "person");
+  const [actor, setActor] = useState(member?.source === "generated" ? "" : (member?.actorLegalName ?? ""));
+  const [date, setDate] = useState(member?.consentDate || new Date().toISOString().slice(0, 10));
+  const [attested, setAttested] = useState(member?.source === "generated" ? false : Boolean(member?.attested));
   const [photo, setPhoto] = useState<File | null>(null);
   const [consent, setConsent] = useState<File | null>(null);
+  const [guidance, setGuidance] = useState(member?.source === "generated" ? (member.identity ?? "") : "");
 
   useEffect(() => {
-    setActor(member?.actorLegalName ?? "");
-    setDate(member?.consentDate ?? new Date().toISOString().slice(0, 10));
-    setAttested(Boolean(member?.attested));
-  }, [member?.uploadedAt, member?.actorLegalName, member?.consentDate, member?.attested]);
+    setMode(member?.source === "generated" ? "generated" : "person");
+    setActor(member?.source === "generated" ? "" : (member?.actorLegalName ?? ""));
+    setDate(member?.consentDate || new Date().toISOString().slice(0, 10));
+    setAttested(member?.source === "generated" ? false : Boolean(member?.attested));
+    setGuidance(member?.source === "generated" ? (member.identity ?? "") : "");
+  }, [member?.uploadedAt, member?.source, member?.actorLegalName, member?.consentDate, member?.attested, member?.identity]);
 
+  const pretty = titleCaseName(name);
   return (
-    <form
-      className="cast-card"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const body = new FormData();
-        body.set("characterName", name);
-        body.set("actorLegalName", actor);
-        body.set("consentDate", date);
-        body.set("attested", attested ? "true" : "false");
-        if (photo) body.set("photo", photo);
-        if (consent) body.set("consent", consent);
-        void run(`Filing consent for ${titleCaseName(name)}…`, `/api/projects/${project.id}/cast`, {
-          method: "POST",
-          body,
-        });
-      }}
-    >
+    <div className="cast-card">
       <div>
         {member?.photoFile ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -465,47 +468,133 @@ function CastCard({
         ) : <div className="portrait empty">No portrait</div>}
       </div>
       <div>
-        <h3>{titleCaseName(name)}</h3>
-        <label>
-          <span>Actor legal name</span>
-          <input type="text" value={actor} onChange={(event) => setActor(event.target.value)} required />
-        </label>
-        <label>
-          <span>Date on the letter</span>
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
-        </label>
-        <label>
-          <span>Face photo</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
-        </label>
-        <label>
-          <span>Signed consent letter</span>
-          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain" onChange={(event) => setConsent(event.target.files?.[0] ?? null)} />
-        </label>
-        {member?.consentSha256 ? <p className="meta">Letter on file · {member.consentOriginalName} · {shortHash(member.consentSha256)}</p> : null}
-        <label className="check">
-          <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
-          <span>This letter was signed by the actor named above, who is 18 or older, and it authorizes this movie to use their likeness.</span>
-        </label>
-        <div className="actions">
-          <button className="primary" type="submit">Save casting</button>
-          {member ? (
-            <button
-              className="danger"
-              type="button"
-              onClick={() => run("Removing cast…", `/api/projects/${project.id}/cast?member=${member.id}`, { method: "DELETE" })}
-            >
-              Remove
-            </button>
-          ) : null}
+        <h3>{pretty}</h3>
+        <div className="source-toggle" role="group" aria-label={`How ${pretty} is cast`}>
+          <button type="button" className="ghost" aria-pressed={mode === "person"} onClick={() => setMode("person")}>Family member</button>
+          <button type="button" className="ghost" aria-pressed={mode === "generated"} onClick={() => setMode("generated")}>Generate a face</button>
         </div>
+        {mode === "person" ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const body = new FormData();
+              body.set("characterName", name);
+              body.set("actorLegalName", actor);
+              body.set("consentDate", date);
+              body.set("attested", attested ? "true" : "false");
+              if (photo) body.set("photo", photo);
+              if (consent) body.set("consent", consent);
+              void run(`Filing consent for ${pretty}…`, `/api/projects/${project.id}/cast`, { method: "POST", body });
+            }}
+          >
+            <label>
+              <span>Actor legal name</span>
+              <input type="text" value={actor} onChange={(event) => setActor(event.target.value)} required />
+            </label>
+            <label>
+              <span>Date on the letter</span>
+              <input type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+            </label>
+            <label>
+              <span>Face photo</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
+            </label>
+            <label>
+              <span>Signed consent letter</span>
+              <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,text/plain" onChange={(event) => setConsent(event.target.files?.[0] ?? null)} />
+            </label>
+            {member?.source !== "generated" && member?.consentSha256 ? <p className="meta">Letter on file · {member.consentOriginalName} · {shortHash(member.consentSha256)}</p> : null}
+            <label className="check">
+              <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} />
+              <span>This letter was signed by the person named above, who is 18 or older, and it authorizes this movie to use their likeness.</span>
+            </label>
+            <div className="actions">
+              <button className="primary" type="submit">Save casting</button>
+              {member?.source !== "generated" && member?.photoFile && member.consentFile ? (
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => run(`Matching angles for ${pretty}…`, `/api/projects/${project.id}/cast/generate`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "angles", characterName: name }),
+                  })}
+                >
+                  Match the other angles
+                </button>
+              ) : null}
+              {member ? <RemoveCast projectId={project.id} memberId={member.id} run={run} /> : null}
+            </div>
+            <p className="note">Matching angles sends this consented photograph to the picture model so the same face can be seen from the side.</p>
+          </form>
+        ) : (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void run(`Generating a face for ${pretty}…`, `/api/projects/${project.id}/cast/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "face", characterName: name, guidance }),
+              });
+            }}
+          >
+            <label>
+              <span>Direction for the face</span>
+              <textarea value={guidance} onChange={(event) => setGuidance(event.target.value)} placeholder="Optional. A fictional adult: age, face, hair. Leave it blank and the studio invents one." />
+            </label>
+            {member?.source === "generated" && member.identity ? <p className="note">{member.identity}</p> : null}
+            <div className="actions">
+              <button className="primary" type="submit">{member?.source === "generated" ? "Generate again" : "Generate a fictional face"}</button>
+              {member ? <RemoveCast projectId={project.id} memberId={member.id} run={run} /> : null}
+            </div>
+            <p className="note">
+              {models?.falConfigured
+                ? "This builds a front portrait and four matching angles. The face is labeled as generated in the credits."
+                : "Connect the picture model before a face can be generated."}
+            </p>
+          </form>
+        )}
+        {member ? <AngleStrip projectId={project.id} member={member} /> : null}
       </div>
-    </form>
+    </div>
+  );
+}
+
+function RemoveCast({
+  projectId, memberId, run,
+}: {
+  projectId: string;
+  memberId: string;
+  run: (label: string, path: string, init?: RequestInit) => Promise<void>;
+}) {
+  return (
+    <button className="danger" type="button" onClick={() => run("Removing cast…", `/api/projects/${projectId}/cast?member=${memberId}`, { method: "DELETE" })}>
+      Remove
+    </button>
+  );
+}
+
+function AngleStrip({ projectId, member }: { projectId: string; member: CastMember }) {
+  const files = FACE_VIEWS.map((view) => ({
+    view,
+    file: view === "front" ? member.views?.front || member.photoFile : member.views?.[view],
+  })).filter((item): item is { view: FaceView; file: string } => Boolean(item.file));
+  if (files.length < 2) return null;
+  return (
+    <div className="angles">
+      {files.map((item) => (
+        <figure key={item.view}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img alt="" src={fileUrl(projectId, item.file)} />
+          <figcaption>{VIEW_LABEL[item.view]}</figcaption>
+        </figure>
+      ))}
+    </div>
   );
 }
 
 function ReelsSection({
-  project, locked, busy, notes, setNotes, run,
+  project, locked, busy, notes, setNotes, run, motion,
 }: {
   project: Project;
   locked: boolean;
@@ -513,6 +602,7 @@ function ReelsSection({
   notes: Record<string, string>;
   setNotes: (value: Record<string, string>) => void;
   run: (label: string, path: string, init?: RequestInit) => Promise<void>;
+  motion: boolean;
 }) {
   const total = project.parts.reduce((sum, part) => sum + part.durationSec, 0);
   return (
@@ -522,8 +612,9 @@ function ReelsSection({
           <p className="pill">Reels · {formatDuration(total)}</p>
           <h2>Scene reels</h2>
           <p>
-            Scenes stay whole. They are packed into reels of up to three minutes, which is as long as a reviewable part gets.
-            Each speaking line is carried by that actor’s consented portrait. A reel is not in the movie until you approve it.
+            {motion
+              ? "Each scene is shot as a 15-second live-action clip, the longest the picture model allows, with the face locked from the angle sheet. Scenes stay whole and are packed into reels of up to three minutes. A reel is not in the movie until you approve it."
+              : "The picture model is not connected, so each reel is a cinematic animatic: the portrait holds the line. Scenes stay whole and are packed into reels of up to three minutes. Connect Models to shoot live-action clips. A reel is not in the movie until you approve it."}
           </p>
         </div>
       </div>
@@ -610,7 +701,7 @@ function PictureSection({
         <div>
           <p className="pill">Picture</p>
           <h2>Merge</h2>
-          <p>The finished movie is the approved reels, in order, with a title and a cast list that names every consented actor.</p>
+          <p>The finished movie is the approved reels, in order, with a title and a cast list. Family members are named from their consent letters. Generated faces are credited as fictional.</p>
         </div>
       </div>
       {locked ? <p className="banner">Approve every reel before the picture can be merged.</p> : null}
@@ -622,9 +713,9 @@ function PictureSection({
           {ledger.map((member) => member ? (
             <tr key={member.id}>
               <td>{titleCaseName(member.characterName)}</td>
-              <td>{member.actorLegalName}</td>
-              <td className="meta">{shortHash(member.consentSha256)}</td>
-              <td>{member.consentDate}</td>
+              <td>{member.source === "generated" ? "Generated character" : member.actorLegalName}</td>
+              <td className="meta">{member.source === "generated" ? "Fictional face" : shortHash(member.consentSha256)}</td>
+              <td>{member.source === "generated" ? "—" : member.consentDate}</td>
             </tr>
           ) : null)}
         </tbody>
